@@ -24,13 +24,14 @@ import boto3
 import requests
 import ConfigParser
 from subprocess import Popen
-import time, sys
+import time, sys, getopt
 
 DYNAMO_NAME = ""
 SERVERS_TIMEOUT = 30
 DELETE_TIMEOUT = 300
 PUBLIC_IP = ""
 NATS_CONFIG_FILE = 'gnats.conf'
+CONFIG_FILE = 'aws-nats.conf'
 
 def get_public_ip():
     """
@@ -55,11 +56,13 @@ def get_config():
     # The timeout for the servers keepalive to remove
     # them from the table.
     global DELETE_TIMEOUT
+    # The config file path
+    global CONFIG_FILE
 
     Config = ConfigParser.ConfigParser()
     try:
         # Here is the configuration file name.
-        Config.read("eb-nats.conf")
+        Config.read(CONFIG_FILE)
         if 'DynamoDB' not in Config.sections():
             print "DynamoDB configuration missing."
             return False
@@ -181,7 +184,33 @@ def check_nats():
     print response.text
 
 
-def main():
+def print_usage():
+    """
+    Prints how to use the script.
+    """
+    print 'aws-nats -c <configfile>'
+
+
+def process_args(argv):
+    """
+    Process the command line arguments for the script.
+    """
+    global CONFIG_FILE
+    try:
+        opts, args = getopt.getopt(argv, "hc:", ["cfile="])
+    except:
+        print_usage()
+        sys.exit(10)
+
+    for opt, arg in opts:
+        if opt == '-h':
+            print_usage()
+            exit(0)
+        elif opt in ("-c", "--cfile"):
+            CONFIG_FILE=arg
+
+def main(argv):
+    process_args(argv)
     get_public_ip()
     if not get_config():
         print "Error reading config."
@@ -231,4 +260,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+	main(sys.argv[1:])
