@@ -24,11 +24,12 @@ import boto3
 import requests
 import ConfigParser
 from subprocess import Popen
-import time, sys, getopt
+import time, sys, getopt, atexit
 
 DYNAMO_NAME = ""
 SERVERS_TIMEOUT = 30
 DELETE_TIMEOUT = 300
+INSTANCE_ID = ""
 PUBLIC_IP = ""
 NATS_CONFIG_FILE = 'gnats.conf'
 CONFIG_FILE = 'aws-nats.conf'
@@ -43,6 +44,19 @@ def get_public_ip():
         print "Error retrieving public ip."
         return
     PUBLIC_IP = response.text
+
+
+def get_instance_id():
+    """
+    Gets the instance id of the actual server from the meta-data service.
+    """
+    global INSTANCE_ID
+    response = requests.get('http://169.254.169.254/latest/meta-data/instance-id')
+    if response.status_code != 200 :
+        print "Error retrieving instance id."
+        return
+    INSTANCE_ID = response.text
+    
 
 def get_config():
     """
@@ -212,51 +226,76 @@ def process_args(argv):
         elif opt in ("-n", "--nfile"):
             NATS_CONFIG_FILE=arg
 
+
+def set_status(value):
+    """
+    Sets the current health of the instance for the auto scaling.
+    """
+    client = boto3.client('autoscaling')
+    client.set_instance_health(InstanceId=INSTANCE_ID, HealthStatus=value, ShouldRespectGracePeriod=True)
+
+
+def goodbye():
+    """
+    Run this command before exit.
+    """
+    touch_status('error')
+    set_status('Unhealthy')
+    
+
 def main(argv):
     process_args(argv)
     get_public_ip()
+    get_instance_id()
     if not get_config():
         print "Error reading config."
-        sys.exit(1) 
+        sys.exit(10) 
 
     try: 
         servers = get_servers()
     except:
         print "Cannot access DynamoDB"
-        sys.exit(2) 
+        sys.exit(20) 
 
     try:
         touch_status('starting')
     except:
         print "Cannot change status."
-        sys.exit(3) 
+        sys.exit(30) 
+
+    atexit.register(goodbye)
+    try:
+       set_status('Healthy')
+    except:
+        print "Error setting instance status to Healty"
+        sys.exit(40)
 
     try:
        generate_nats_cluster(servers)
     except:
         print "Cannot generate NATS configuration."
         touch_status('error')
-        sys.exit(4) 
+        sys.exit(50) 
 
     try:
         run_nats()
     except:
         print "Cannot run NATS."
         touch_status('error')
-        sys.exit(5)
+        sys.exit(60)
 
     while(True):
         try:
             check_nats() 
         except:
             print "NATS is dead!"
-            sys.exit(6)
+            sys.exit(70)
 
         try:
             touch_status('working')
         except:
             print "Cannot change status."
-            sys.exit(7)
+            sys.exit(80)
 
         time.sleep(10)
 
