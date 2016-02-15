@@ -165,7 +165,7 @@ def run_nats():
     Run the gnatsd daemon!
     """
     print "Starting NATS"
-    Popen('./gnatsd --pid /tmp/gnats.pid --config gnats.conf', shell=True)
+    Popen('gnatsd --pid /tmp/gnats.pid --config gnats.conf', shell=True)
     time.sleep(5)
 
 
