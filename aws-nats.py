@@ -165,7 +165,7 @@ def run_nats():
     Run the gnatsd daemon!
     """
     print "Starting NATS"
-    Popen('gnatsd --pid /tmp/gnats.pid --config gnats.conf', shell=True)
+    Popen('gnatsd --pid /tmp/gnats.pid --config '+NATS_CONFIG_FILE, shell=True)
     time.sleep(5)
 
 
@@ -188,7 +188,7 @@ def print_usage():
     """
     Prints how to use the script.
     """
-    print 'aws-nats -c <configfile>'
+    print 'aws-nats -c <configfile> -n <natsconfigfile>'
 
 
 def process_args(argv):
@@ -196,8 +196,9 @@ def process_args(argv):
     Process the command line arguments for the script.
     """
     global CONFIG_FILE
+    global NATS_CONFIG_FILE
     try:
-        opts, args = getopt.getopt(argv, "hc:", ["cfile="])
+		opts, args = getopt.getopt(argv, "hc:n:", ["cfile=", "nfile="])
     except:
         print_usage()
         sys.exit(10)
@@ -208,6 +209,8 @@ def process_args(argv):
             exit(0)
         elif opt in ("-c", "--cfile"):
             CONFIG_FILE=arg
+        elif opt in ("-n", "--nfile"):
+            NATS_CONFIG_FILE=arg
 
 def main(argv):
     process_args(argv)
