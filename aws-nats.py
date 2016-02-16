@@ -33,6 +33,9 @@ INSTANCE_ID = ""
 PUBLIC_IP = ""
 NATS_CONFIG_FILE = 'gnats.conf'
 CONFIG_FILE = 'aws-nats.conf'
+NATS_USER = ""
+NATS_PASS = ""
+NATS_TIME = 1
 
 def get_public_ip():
     """
@@ -72,6 +75,12 @@ def get_config():
     global DELETE_TIMEOUT
     # The config file path
     global CONFIG_FILE
+    # The NATS User
+    global NATS_USER
+    # The NATS Password
+    global NATS_PASS
+    # The NATS connection timeout
+    global NATS_TIME
 
     Config = ConfigParser.ConfigParser()
     try:
@@ -101,7 +110,14 @@ def get_config():
     except:
         print "Cannot read delete timeout"
         return False
-    
+   
+    try:
+        NATS_USER = Config.get('user', 'nats_user')
+        NATS_PASS = Config.get('user', 'nats_pass')
+        NATS_TIME = Config.get('user', 'timeout')
+    except:
+        pass
+
     return True
 
 
@@ -147,6 +163,19 @@ def generate_nats_cluster(servers):
     f.write("\ncluster {\n")
     f.write("\thost: '0.0.0.0'\n")
     f.write("\tport: 7244\n")
+    f.write("\n# Authorization for client connections\n")
+    if len(NATS_USER) > 0:
+        f.write("\nauthorization {\n")
+        f.write("\tuser: ")
+        f.write(NATS_USER)
+        f.write("\n")
+        f.write("\tpassword: ")
+        f.write(NATS_PASS)
+        f.write("\n")
+        f.write("timeout: ")
+        f.write(NATS_TIME)
+        f.write("\n}"
+
     if len(servers) > 0:
         f.write("\n\troutes = [")
         for server in servers:
