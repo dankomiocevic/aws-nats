@@ -174,7 +174,7 @@ def generate_nats_cluster(servers):
         f.write("\n")
         f.write("timeout: ")
         f.write(NATS_TIME)
-        f.write("\n}"
+        f.write("\n}")
 
     if len(servers) > 0:
         f.write("\n\troutes = [")
