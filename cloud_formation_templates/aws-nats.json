@@ -1,0 +1,477 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "This is a sample CloudFormation template for deploying aws-nats. This template will create a cluster with auto-scaling and will create a DynamoDB table to manage the nodes.",
+
+  "Parameters": {
+    "KeyPair": {
+      "Default": "VTServicesOregon",
+      "Description": "Remove this default value and enter the name of your EC2 keypair to use for SSH access",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern": "[-_ a-zA-Z0-9]*",
+      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores."
+    },
+
+    "InstanceType" : {
+      "Default" : "t1.micro",
+      "Description" : "AWS EC2 instance type",
+      "Type" : "String"
+    }, 
+
+    "MinInstances" : {
+      "Default" : 1,
+      "MinValue": 1,
+      "Description" : "The minimum number of instances on the AutoScalingGroup.",
+      "Type" : "Number"
+    },
+
+    "MaxInstances" : {
+      "Default" : 4,
+      "MinValue": 1,
+      "Description" : "The maximum number of instances on the AutoScalingGroup.",
+      "Type" : "Number"
+    },
+
+    "NATSUser" : {
+      "Default" : "NATS User that connects to the service",
+      "Description" : "The user to connect to the services.",
+      "Type" : "String"
+    },
+
+    "NATSPass" : {
+      "Default" : "NATS User Password",
+      "Description" : "The password of the user that connects to the services.",
+      "Type" : "String"
+    },
+
+    "NATSTimeout" : {
+      "Default": 1,
+      "Description" : "Timeout for the NATS User.",
+      "Type" : "Number"
+    }
+
+  },
+
+  "Mappings": {
+    "Region2AMI": {
+      "us-east-1": {
+        "64": "ami-fb8e9292"
+      },
+      "us-west-1": {
+        "64": "ami-7aba833f"
+      },
+      "us-west-2": {
+        "64": "ami-043a5034"
+      },
+      "eu-west-1": {
+        "64": "ami-2918e35e"
+      },
+      "sa-east-1": {
+        "64": "ami-215dff3c"
+      },
+      "ap-southeast-1": {
+        "64": "ami-b40d5ee6"
+      },
+      "ap-southeast-2": {
+        "64": "ami-3b4bd301"
+      },
+      "ap-northeast-1": {
+        "64": "ami-c9562fc8"
+      }
+    }
+  },
+
+  "Resources": {
+		"awsnatsdb": {
+			"Type" : "AWS::DynamoDB::Table",
+			"Properties" : {
+				"AttributeDefinitions" : [
+					{
+						"AttributeName" : "ip",
+						"AttributeType" : "S"
+					}
+				],
+				"KeySchema" : [
+					{
+						"AttributeName" : "ip",
+						"KeyType" : "HASH"
+					}
+				],
+				"ProvisionedThroughput" : {
+					"ReadCapacityUnits" : 2,
+					"WriteCapacityUnits" : 2
+				},
+				"TableName": "aws-nats"
+			}
+		},
+    "LaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": { "Fn::FindInMap": [ "Region2AMI", { "Ref": "AWS::Region" }, "64" ] },
+        "InstanceType": { "Ref" : "InstanceType" },
+        "KeyName": { "Ref": "KeyPair" },
+        "SecurityGroups": [ { "Ref": "SecurityGroup" } ],
+        "IamInstanceProfile"  : { "Ref" : "IamInstanceProfile" },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [ "\n", [
+              "#!/usr/bin/env bash",
+              "# Helper function",
+              "log(){",
+              "    timenow=`date +%Y-%m-%dT%H:%M:%S.%N`",
+              "    echo \"$timenow: $1\" >> $INSTALLER_LOG_FILE_LOCATION",
+              "}",
+              "",
+              "backup_file_locally(){",
+              "  FILE=$1",
+              "  BACKUP_FILE_NAME=$FILE.`date +\"%Y.%m.%d.%H.%M.%S.%N\".backup`",
+              "  mv $FILE \"$FILE.`date +\"%Y.%m.%d.%H.%M.%S.%N\".backup`\"",
+              "  log \"Backed up $FILE to $BACKUP_FILE_NAME\"",
+              "}",
+              "error_exit(){",
+              "  log \"$1\"",
+              {
+                "Fn::Join": [ "", [
+                    "/opt/aws/bin/cfn-signal ",
+                    " -e 1 ",
+                    " -r \"$1\"",
+                    " '", { "Ref" : "WaitHandle" }, "'\n"
+                  ]
+                ]
+              },
+              "  exit 1",
+              "}",
+              "INSTALLER_LOG_FILE_LOCATION=/etc/aws-nats/logs/installer.log",
+              "mkdir -p /etc/aws-nats/{scripts,logs} || error_exit 'Failed to create /etc/aws-nats'",
+              {
+                "Fn::Join": [ " ", [
+                    "/opt/aws/bin/cfn-init ",
+                    "  --stack ", { "Ref": "AWS::StackId" },
+                    "  --resource LaunchConfig ",
+                    "  --region ", { "Ref": "AWS::Region" },
+                    " || error_exit 'Failed in AWS::CloudFormation::Init. Check logs at /var/log/cfn-init.log'"
+                  ]
+                ]
+              },
+              "",
+              "if [[ -f $INSTALLER_LOG_FILE_LOCATION ]]; then",
+              "  backup_file_locally $INSTALLER_LOG_FILE_LOCATION",
+              "fi",
+              "easy_install pip || error_exit 'Failed to install pip'",
+              "log \"Installed pip\"",
+              "echo \"boto3\">/etc/aws-nats/requirements.txt",
+              "echo \"requests\">>/etc/aws-nats/requirements.txt",
+              "/usr/local/bin/pip install -U -r /etc/aws-nats/requirements.txt || error_exit 'Failed to install packages from pip repository'",
+              "log \"Installed packages\"",
+              "",
+              "wget -O /home/ec2-user/gnatsd.tar.gz https://github.com/nats-io/gnatsd/releases/download/v0.7.2/gnatsd-v0.7.2-linux-amd64.tar.gz",
+              "tar -xzf /home/ec2-user/gnatsd.tar.gz -C /home/ec2-user/",
+              "cp /home/ec2-user/gnatsd /bin/gnatsd",
+              "log \"Installed gnatsd\"",
+              "",
+              "git clone https://github.com/dankomiocevic/aws-nats.git /home/ec2-user/aws-nats || error_exit 'Cannot clone git repository.'",
+              "chmod +x /home/ec2-user/aws-nats/aws-nats.py || error_exit 'Failed to set permissions to aws-nats.py.'",
+              "cp /home/ec2-user/aws-nats/aws-nats.py /etc/aws-nats/scripts/aws-nats || error_exit 'Failed to copy aws-nats.py.'",
+              "log \"Installed aws-nats\"",
+              "",
+              "",
+              "mkdir -p ~/.aws || error_exit 'Failed to create /home/root/.aws'",
+              "cp /home/ec2-user/.aws/config ~/.aws/config",
+              "echo \" \" > /etc/aws-nats/scripts/nats.conf",
+              "chown ec2-user:ec2-user /etc/aws-nats/scripts/nats.conf",
+              "chmod 755 /etc/aws-nats/scripts/nats.conf",
+							"service aws-nats start || error_exit 'Failed to start aws-nats service. Check /etc/aws-nats/logs/service.log'",
+              "log \"aws-nats service started\"",
+              {
+                "Fn::Join": [ "", [
+                  "# All is well so signal success\n",
+                  "/opt/aws/bin/cfn-signal -e 0 -r \"aws-nats instance setup complete\" '", { "Ref": "WaitHandle" }, "'\n"
+                ]]
+              }
+            ]]
+          }
+        }
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "packages" : {
+              "yum" : {
+                "git" : []
+              }
+            },
+            "files": {
+              "/home/ec2-user/.aws/config": {
+                "content" : { "Fn::Join" : ["", [
+                  "[default]\n",
+                  "region=", { "Ref": "AWS::Region" }, "\n"
+                ]]},
+                "mode": "000755",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/init.d/aws-nats": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/usr/bin/env bash",
+                      "### BEGIN INIT INFO",
+                      "# Provides:        aws-nats",
+                      "# Required-Start:  $remote_fs $syslog",
+                      "# Required-Stop:   $remote_fs $syslog",
+                      "# Default-Start:   2 3 4 5",
+                      "# Default-Stop:    0 1 6",
+                      "# Short-Description: Cluster manager for NATS.",
+                      "# Description:     aws-nats manages gnatsd to work in a cluster environment.",
+                      "### END INIT INFO",
+                      "",
+                      "NAME=aws-nats",
+                      "DAEMON=/etc/aws-nats/scripts/aws-nats",
+                      "DAEMON_START_ARGS=\"-c /etc/aws-nats/scripts/aws-nats.conf -n /etc/aws-nats/scripts/nats.conf\"",
+                      "DAEMON_STOP_ARGS=\"\"",
+                      "PIDFILE=/var/run/$NAME.pid",
+                      "SCRIPTNAME=/etc/init.d/$NAME",
+                      "SERVICE_LOG_FILE=/etc/aws-nats/logs/service.log",
+                      "",
+                      "",
+                      "# Exit if the package is not installed",
+                      "[ -x \"$DAEMON\" ] || exit 1",
+                      "",
+                      ". /etc/rc.d/init.d/functions",
+                      "",
+                      "log(){",
+                      "    timenow=`date +%Y-%m-%dT%H:%M:%S.%N`",
+                      "    echo \"$timenow: $1\"",
+                      "    echo \"$timenow: $1\" >> $SERVICE_LOG_FILE",
+                      "}",
+                      "",
+                      "error_exit(){",
+                      "  log \"$1\"",
+                      "  exit 1",
+                      "}",
+                      "",
+                      "",
+                      "do_start()",
+                      "{",
+                      "   log \"do_start:Starting $NAME\"",
+                      "   PID=`$DAEMON $DAEMON_START_ARGS > /dev/null 2>&1 & echo $!`",
+                      "   log \"Getting PID\"",
+                      "     if [ -z $PID ]; then",
+                      "       log \"Fail\"",
+                      "     else",
+                      "       echo $PID > $PIDFILE",
+                      "       log \"Done.\"",
+                      "     fi",
+                      "}",
+                      "",
+                      "do_stop()",
+                      "{",
+                      "   log \"do_stop:Stopping $NAME\"",
+                      "   PID=`cat $PIDFILE`",
+                      "   if [ -f $PIDFILE ]; then",
+                      "     kill -HUP $PID",
+                      "     log \"Done.\"",
+                      "     rm -f $PIDFILE",
+                      "   else",
+                      "     log \"PIDFILE not found.\"",
+                      "   fi",
+                      "}",
+                      "",
+                      "do_status()",
+                      "{",
+                      "   log \"do_status:Status $NAME\"",
+                      "   if [ -f $PIDFILE ]; then",
+                      "     PID=`cat $PIDFILE`",
+                      "     if [ -z \"`ps axf | grep ${PID} | grep -v grep`\" ]; then",
+                      "       echo \"Process dead but pidfile exists\"",
+                      "     else",
+                      "       echo \"Running\"",
+                      "     fi",
+                      "   else",
+                      "     echo \"Service not running\"",
+                      "   fi",
+                      "}",
+                      "",
+                      "",
+                      "case \"$1\" in",
+                      "  start)",
+                      "  do_start",
+                      "  ;;",
+                      "  stop)",
+                      "  do_stop",
+                      "  ;;",
+                      "  status)",
+                      "  do_status",
+                      "  ;;",
+                      "  restart|force-reload)",
+                      "  do_stop",
+                      "  do_start",
+                      "    #*)",
+                      "  ;;",
+                      "  *)",
+                      "  echo \"Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}\" >&2",
+                      "  exit 3",
+                      "  ;;",
+                      "esac",
+                      "",
+                      ":"
+
+                    ]
+                  ]
+                },
+                "mode": "000755",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/aws-nats/scripts/aws-nats.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[general]\n",
+                      "servers-timeout=30\n",
+                      "delete-timeout=300\n\n",
+
+                      "[DynamoDB]\n",
+                      "table=", {"Ref":"awsnatsdb"} ,"\n\n",
+                      
+                      "[user]\n",
+                      "nats_user=", {"Ref":"NATSUser"}, "\n",
+                      "nats_pass=", {"Ref":"NATSPass"}, "\n",
+                      "timeout=", {"Ref":"NATSTimeout"}, "\n"
+                    ]
+                  ]
+                },
+                "mode": "000755",
+                "owner": "root",
+                "group": "root"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": { "Fn::GetAZs": "" },
+        "Cooldown": 300,
+        "LaunchConfigurationName": { "Ref": "LaunchConfig" },
+        "MaxSize": {"Ref": "MaxInstances"},
+        "MinSize": {"Ref": "MinInstances"},
+        "Tags" : [
+          {
+            "Key"   : "Name",
+            "Value" : "aws-nats",
+            "PropagateAtLaunch" : "true"
+          }
+        ]
+      }
+    },
+
+    "IamRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version" : "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          }]
+        },
+        "Path": "/",
+        "Policies": [ {
+          "PolicyName": "root",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+						"Statement": [
+              {
+                "Action":[
+                  "autoscaling:SetInstanceHealth"
+                ],
+                "Effect": "Allow",
+                "Resource": "*"
+              },
+							{
+								"Action": [
+									"dynamodb:Scan",
+									"dynamodb:GetItem",
+									"dynamodb:PutItem",
+									"dynamodb:UpdateItem",
+									"dynamodb:DeleteItem"
+								],
+								"Effect": "Allow",
+								"Resource": { "Fn::Join" :  [ "",
+                    [ "arn:aws:dynamodb:", { "Ref" : "AWS::Region" }, ":",{"Ref": "AWS::AccountId"},":table/", { "Ref" : "awsnatsdb" } ]
+                  ]
+                }
+							}
+						]
+          }
+        }]
+      }
+    },
+
+    "IamInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "IamRole" } ]
+      }
+    },
+
+    "SecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Allow access to MyInstance",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 4242,
+            "ToPort": 4242,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 7244,
+            "ToPort": 7244,
+            "CidrIp": "0.0.0.0/0"
+          }
+
+        ]
+      }
+    },
+
+    "WaitHandle" : {
+      "Type": "AWS::CloudFormation::WaitConditionHandle"
+    },
+
+    "WaitCondition" : {
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "DependsOn": "AutoScalingGroup",
+      "Properties": {
+        "Handle": { "Ref" : "WaitHandle" },
+        "Timeout": "600"
+      }
+    }
+  },
+  "Outputs": {
+    "URL": {
+      "Description": "EC2 instance",
+      "Value": "You can find your EC2 instance at https://console.aws.amazon.com/ec2/v2/home?#Instances:search=aws-nats"
+    }
+  }
+}
