@@ -86,10 +86,10 @@ Configuration
 
 The template has some configuration options detailed here:
 
-* KeyPair: This is the Key to connect to the instances using SSH.
-* InstanceType: The type of EC2 instance to be used in the cluster (t1.micro as default).
-* MinInstances: An integer defining how many instances will be the minimum for the AutoScaling group.
-* MaxInstances: An integer defining how many instances will be the maximum for the AutoScaling group.
-* NATSUser: The user to connect to the NATS queue.
-* NATSPass: The password to connect to the NATS queue.
-* NATSTimeout: Value of seconds to use as timeout for the queue clients.
+* **KeyPair**: This is the Key to connect to the instances using SSH.
+* **InstanceType**: The type of EC2 instance to be used in the cluster (t1.micro as default).
+* **MinInstances**: An integer defining how many instances will be the minimum for the AutoScaling group.
+* **MaxInstances**: An integer defining how many instances will be the maximum for the AutoScaling group.
+* **NATSUser**: The user to connect to the NATS queue.
+* **NATSPass**: The password to connect to the NATS queue.
+* **NATSTimeout**: Value of seconds to use as timeout for the queue clients.
