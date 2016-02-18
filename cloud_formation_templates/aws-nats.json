@@ -5,7 +5,7 @@
 
   "Parameters": {
     "KeyPair": {
-      "Default": "VTServicesOregon",
+      "Default": "KeyPair",
       "Description": "Remove this default value and enter the name of your EC2 keypair to use for SSH access",
       "Type": "String",
       "MinLength": "1",

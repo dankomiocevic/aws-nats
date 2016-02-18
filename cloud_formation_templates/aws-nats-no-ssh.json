@@ -4,16 +4,6 @@
   "Description": "This is a sample CloudFormation template for deploying aws-nats. This template will create a cluster with auto-scaling and will create a DynamoDB table to manage the nodes.",
 
   "Parameters": {
-    "KeyPair": {
-      "Default": "VTServicesOregon",
-      "Description": "Remove this default value and enter the name of your EC2 keypair to use for SSH access",
-      "Type": "String",
-      "MinLength": "1",
-      "MaxLength": "64",
-      "AllowedPattern": "[-_ a-zA-Z0-9]*",
-      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores."
-    },
-
     "InstanceType" : {
       "Default" : "t1.micro",
       "Description" : "AWS EC2 instance type",
@@ -111,7 +101,6 @@
       "Properties": {
         "ImageId": { "Fn::FindInMap": [ "Region2AMI", { "Ref": "AWS::Region" }, "64" ] },
         "InstanceType": { "Ref" : "InstanceType" },
-        "KeyName": { "Ref": "KeyPair" },
         "SecurityGroups": [ { "Ref": "SecurityGroup" } ],
         "IamInstanceProfile"  : { "Ref" : "IamInstanceProfile" },
         "UserData": {
