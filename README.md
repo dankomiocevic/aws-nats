@@ -50,7 +50,6 @@ The IAM statement required is as follows:
     ],
     "Effect": "Allow",
     "Resource": "DynamoDB table ARN"
-      ]
     }
   }
 ]
