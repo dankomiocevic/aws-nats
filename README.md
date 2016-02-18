@@ -95,6 +95,20 @@ This script requires the following packages:
 It also requires a DynamoDB table to be created with a String HASH key named "ip". This table will be used to keep track of the available servers at any moment. It maintains a keep-alive timer to check that the instance is still there (time field) and a state field to know what is the instance doing.
 
 
+### CLI Options ###
+
+These are the options to use aws-nats from the CLI:
+
+```bash
+aws-nats -c <configfile> -n <natsconfigfile>
+```
+
+Where:
+
+* *configfile*: Is the config file defined in the previous sections. 
+* *natsconfigfile*: Is the path where the gnatsd configuration file will be created.
+
+
 License
 -------
 
