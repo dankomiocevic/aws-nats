@@ -203,6 +203,25 @@ def touch_status(status):
         }
     )
 
+def add_description(description):
+    """
+    Adds a description of what is the server
+    doing.
+    """
+    print "Setting description: %s" % description 
+    dbclient = boto3.resource('dynamodb')
+    table = dbclient.Table(DYNAMO_NAME)
+    table.update_item(
+        Key={
+            'ip': PUBLIC_IP
+        },
+        UpdateExpression="set description = :desc",
+        ExpressionAttributeValues={
+            ':desc': description
+        },
+        ReturnValues='NONE'
+    )
+
 def run_nats():
     """
     Run the gnatsd daemon!
@@ -297,12 +316,14 @@ def main(argv):
        set_status('Healthy')
     except:
         print "Error setting instance status to Healty"
+        set_description("Error setting instance status to Healty")
         sys.exit(40)
 
     try:
        generate_nats_cluster(servers)
     except:
         print "Cannot generate NATS configuration."
+        set_description("Cannot generate NATS configuration.")
         touch_status('error')
         sys.exit(50) 
 
@@ -310,6 +331,7 @@ def main(argv):
         run_nats()
     except:
         print "Cannot run NATS."
+        set_description("Cannot run NATS.")
         touch_status('error')
         sys.exit(60)
 
@@ -318,6 +340,7 @@ def main(argv):
             check_nats() 
         except:
             print "NATS is dead!"
+            set_description("NATS is dead!")
             sys.exit(70)
 
         try:
