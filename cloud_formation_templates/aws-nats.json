@@ -7,7 +7,7 @@
     "KeyPair": {
       "Default": "KeyPair",
       "Description": "Remove this default value and enter the name of your EC2 keypair to use for SSH access",
-      "Type": "String",
+      "Type": "AWS::EC2::KeyPair::KeyName",
       "MinLength": "1",
       "MaxLength": "64",
       "AllowedPattern": "[-_ a-zA-Z0-9]*",
