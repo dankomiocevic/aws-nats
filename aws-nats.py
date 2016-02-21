@@ -160,10 +160,6 @@ def generate_nats_cluster(servers):
     f = open(NATS_CONFIG_FILE, "w")
     f.write("port: 4242      # port to listen for client connections\n")
     f.write("http_port: 8222 # HTTP monitoring port\n")
-    f.write("\ncluster {\n")
-    f.write("\thost: '0.0.0.0'\n")
-    f.write("\tport: 7244\n")
-    f.write("\n# Authorization for client connections\n")
     if len(NATS_USER) > 0:
         f.write("\nauthorization {\n")
         f.write("\tuser: ")
@@ -172,10 +168,14 @@ def generate_nats_cluster(servers):
         f.write("\tpassword: ")
         f.write(NATS_PASS)
         f.write("\n")
-        f.write("timeout: ")
+        f.write("\ttimeout: ")
         f.write(NATS_TIME)
         f.write("\n}")
 
+    f.write("\ncluster {\n")
+    f.write("\thost: '0.0.0.0'\n")
+    f.write("\tport: 7244\n")
+    f.write("\n# Authorization for client connections\n")
     if len(servers) > 0:
         f.write("\n\troutes = [")
         for server in servers:
@@ -203,7 +203,7 @@ def touch_status(status):
         }
     )
 
-def add_description(description):
+def set_description(description):
     """
     Adds a description of what is the server
     doing.
