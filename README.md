@@ -107,6 +107,12 @@ Where:
 * *natsconfigfile*: Is the path where the gnatsd configuration file will be created.
 
 
+Examples
+--------
+
+There are some [client-side examples](https://github.com/dankomiocevic/aws-nats/tree/master/client_examples) to show how to use aws-nats in your application.
+
+
 License
 -------
 
